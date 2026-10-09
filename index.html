@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>OP-XY Filter Lab</title>
+<style>
+  :root{
+    --bg:#d7d7d3; --panel:#e7e7e3; --ink:#171717; --muted:#666660;
+    --line:#b7b7b0; --dark:#30302f; --mid:#777773; --light:#b4b4ae; --white:#f6f6f1;
+    --orange:#ff5a20; --yellow:#f0d642; --green:#57a86c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,Helvetica,sans-serif;letter-spacing:.01em}
+  .shell{max-width:1180px;margin:28px auto;padding:0 18px 60px}
+  header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1px solid #999;padding:0 0 14px;margin-bottom:18px}
+  h1{font-size:22px;margin:0;text-transform:lowercase;letter-spacing:-.04em}
+  .sub{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.14em}
+  .device{background:var(--panel);border:1px solid #aaa;border-radius:16px;padding:18px;box-shadow:0 12px 28px #0001}
+  .toprow{display:grid;grid-template-columns:1.15fr .85fr;gap:14px}
+  .screen{background:#181919;border-radius:6px;color:#e9eadf;padding:14px;min-height:265px;position:relative;overflow:hidden}
+  .screenhead{display:flex;justify-content:space-between;font-size:10px;text-transform:uppercase;color:#aaa}
+  .viz{width:100%;height:210px;display:block}
+  .explain{background:#d1d1cc;border-radius:6px;padding:16px;display:flex;flex-direction:column;justify-content:space-between}
+  .big{font-size:28px;line-height:1.02;letter-spacing:-.05em;margin:0 0 10px}
+  .copy{font-size:14px;line-height:1.45;color:#444;margin:0}
+  .signal{font-size:12px;margin-top:18px;padding-top:12px;border-top:1px solid #aaa}
+  .signal b{font-weight:700}
+  .tabs{display:flex;gap:8px;margin:16px 0 12px}
+  button{font:inherit;color:inherit}
+  .tab,.preset,.play{border:1px solid #999;background:#d9d9d4;border-radius:999px;padding:9px 14px;cursor:pointer;font-size:12px}
+  .tab.active{background:#222;color:#f2f2ec;border-color:#222}
+  .play{background:var(--orange);border-color:var(--orange);font-weight:bold}
+  .controls{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .control{background:#d0d0cb;border-radius:8px;padding:13px;min-width:0}
+  .label{display:flex;justify-content:space-between;gap:8px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px}
+  input[type=range]{width:100%;accent-color:#292929}
+  .hint{font-size:10px;color:#666;margin-top:7px;line-height:1.3}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+  .mini{background:#d0d0cb;border-radius:8px;padding:14px}
+  .mini h2{font-size:13px;margin:0 0 8px;text-transform:uppercase;letter-spacing:.08em}
+  .mini p{font-size:12px;color:#555;line-height:1.4;margin:0 0 10px}
+  .presets{display:flex;flex-wrap:wrap;gap:7px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:10px;color:#bbb;margin-top:6px}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+  .footer{font-size:10px;color:#666;margin-top:12px}
+  @media(max-width:800px){.toprow,.row2{grid-template-columns:1fr}.controls{grid-template-columns:1fr 1fr}}
+  @media(max-width:500px){.controls{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="shell">
+<header><div><div class="sub">interactive synthesis lesson</div><h1>filter / envelope lab</h1></div><div class="sub">inspired by OP-XY</div></header>
+
+<div class="device">
+  <div class="toprow">
+    <section class="screen">
+      <div class="screenhead"><span id="modeName">combined view</span><span id="phase">ready</span></div>
+      <canvas id="canvas" class="viz"></canvas>
+      <div class="legend">
+        <span><i class="dot" style="background:#f0d642"></i>filter cutoff</span>
+        <span><i class="dot" style="background:#ff5a20"></i>filter envelope</span>
+        <span><i class="dot" style="background:#57a86c"></i>amp envelope</span>
+      </div>
+    </section>
+    <aside class="explain">
+      <div>
+        <p class="big" id="headline">one note,<br>three moving parts.</p>
+        <p class="copy" id="description">The <b>filter</b> decides which frequencies get through. The <b>filter envelope</b> moves the cutoff over the life of the note. The <b>amp envelope</b> separately shapes how loud the note is.</p>
+      </div>
+      <div class="signal"><b>oscillator</b> → filter + filter envelope → amplifier + amp envelope → output</div>
+    </aside>
+  </div>
+
+  <div class="tabs">
+    <button class="tab" data-mode="filter">01 filter</button>
+    <button class="tab" data-mode="filterenv">02 filter envelope</button>
+    <button class="tab" data-mode="ampenv">03 amp envelope</button>
+    <button class="tab active" data-mode="combined">04 combined</button>
+    <button class="play" id="play">▶ play note</button>
+  </div>
+
+  <div class="controls">
+    <div class="control">
+      <div class="label"><span>cutoff</span><output id="cutoffOut">28%</output></div>
+      <input id="cutoff" type="range" min="5" max="95" value="28">
+      <div class="hint">The filter's resting position. Lower = darker. Higher = brighter.</div>
+    </div>
+    <div class="control">
+      <div class="label"><span>resonance</span><output id="resOut">18%</output></div>
+      <input id="res" type="range" min="0" max="85" value="18">
+      <div class="hint">Emphasizes frequencies right around the cutoff. More = peakier / squelchier.</div>
+    </div>
+    <div class="control">
+      <div class="label"><span>filter env amount</span><output id="amountOut">65%</output></div>
+      <input id="amount" type="range" min="-80" max="100" value="65">
+      <div class="hint">How far the filter envelope is allowed to move the cutoff. It is a depth control.</div>
+    </div>
+    <div class="control">
+      <div class="label"><span>filter decay</span><output id="fDecayOut">0.8s</output></div>
+      <input id="fDecay" type="range" min=".15" max="3" value=".8" step=".05">
+      <div class="hint">How quickly the filter falls from its bright peak toward sustain.</div>
+    </div>
+  </div>
+
+  <div class="row2">
+    <section class="mini">
+      <h2>filter envelope ADSR</h2>
+      <p>This shape is not volume. Think of it as a little hand automatically moving the <b>cutoff knob</b>.</p>
+      <div class="controls" style="grid-template-columns:repeat(3,1fr)">
+        <div><div class="label"><span>attack</span><output id="fAttackOut">0.08s</output></div><input id="fAttack" type="range" min=".01" max="2" value=".08" step=".01"></div>
+        <div><div class="label"><span>sustain</span><output id="fSustainOut">22%</output></div><input id="fSustain" type="range" min="0" max="100" value="22"></div>
+        <div><div class="label"><span>release</span><output id="fReleaseOut">0.5s</output></div><input id="fRelease" type="range" min=".05" max="3" value=".5" step=".05"></div>
+      </div>
+    </section>
+    <section class="mini">
+      <h2>amp envelope ADSR</h2>
+      <p>This one <b>is</b> volume over time: how quickly the note appears, settles, and disappears.</p>
+      <div class="controls" style="grid-template-columns:repeat(4,1fr)">
+        <div><div class="label"><span>A</span><output id="aAttackOut">0.02s</output></div><input id="aAttack" type="range" min=".01" max="2" value=".02" step=".01"></div>
+        <div><div class="label"><span>D</span><output id="aDecayOut">0.4s</output></div><input id="aDecay" type="range" min=".05" max="3" value=".4" step=".05"></div>
+        <div><div class="label"><span>S</span><output id="aSustainOut">75%</output></div><input id="aSustain" type="range" min="0" max="100" value="75"></div>
+        <div><div class="label"><span>R</span><output id="aReleaseOut">0.6s</output></div><input id="aRelease" type="range" min=".05" max="3" value=".6" step=".05"></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="mini" style="margin-top:14px">
+    <h2>hear the idea</h2>
+    <p>These presets deliberately exaggerate the relationship. Press a preset, then Play Note. Watch the vertical playhead move across the curves while Web Audio produces a simple synth tone.</p>
+    <div class="presets">
+      <button class="preset" data-preset="pluck">plucky bass</button>
+      <button class="preset" data-preset="pad">slow pad</button>
+      <button class="preset" data-preset="flat">filter only</button>
+      <button class="preset" data-preset="noenv">no filter envelope</button>
+    </div>
+  </div>
+  <div class="footer">Educational visualization inspired by the OP-XY's industrial interface. Curves are conceptual rather than a measurement of Teenage Engineering's filter algorithms.</div>
+</div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const ids=['cutoff','res','amount','fDecay','fAttack','fSustain','fRelease','aAttack','aDecay','aSustain','aRelease'];
+const el=Object.fromEntries(ids.map(x=>[x,$(x)]));
+const outMap={cutoff:['cutoffOut','%'],res:['resOut','%'],amount:['amountOut','%'],fDecay:['fDecayOut','s'],fAttack:['fAttackOut','s'],fSustain:['fSustainOut','%'],fRelease:['fReleaseOut','s'],aAttack:['aAttackOut','s'],aDecay:['aDecayOut','s'],aSustain:['aSustainOut','%'],aRelease:['aReleaseOut','s']};
+let mode='combined', start=null, raf=null, audio=null;
+const hold=2.6,total=4.2;
+function v(id){return +el[id].value}
+function filterEnv(t){
+  let A=v('fAttack'),D=v('fDecay'),S=v('fSustain')/100,R=v('fRelease');
+  if(t<A)return t/A;
+  if(t<A+D)return 1-(1-S)*(t-A)/D;
+  if(t<hold)return S;
+  if(t<hold+R)return S*(1-(t-hold)/R);
+  return 0;
+}
+function ampEnv(t){
+  let A=v('aAttack'),D=v('aDecay'),S=v('aSustain')/100,R=v('aRelease');
+  if(t<A)return t/A;
+  if(t<A+D)return 1-(1-S)*(t-A)/D;
+  if(t<hold)return S;
+  if(t<hold+R)return S*(1-(t-hold)/R);
+  return 0;
+}
+function cut(t){return Math.max(.03,Math.min(.98,v('cutoff')/100+(v('amount')/100)*.62*filterEnv(t)))}
+function updateLabels(){for(const [k,[oid,suf]] of Object.entries(outMap)) $(oid).textContent=el[k].value+suf; draw(currentT())}
+ids.forEach(id=>el[id].addEventListener('input',updateLabels));
+function currentT(){return start==null?0:Math.min(total,(performance.now()-start)/1000)}
+const c=$('canvas'),ctx=c.getContext('2d');
+function resize(){const r=c.getBoundingClientRect();c.width=r.width*devicePixelRatio;c.height=r.height*devicePixelRatio;ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);draw(currentT())}
+window.addEventListener('resize',resize);
+function curve(fn,color,w,h,left,top){
+  ctx.beginPath();
+  for(let i=0;i<=240;i++){let t=total*i/240,x=left+(w-left-10)*i/240,y=top+(h-top-18)*(1-fn(t));i?ctx.lineTo(x,y):ctx.moveTo(x,y)}
+  ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.stroke()
+}
+function draw(t=0){
+ const w=c.clientWidth,h=c.clientHeight,left=26,top=18;
+ ctx.clearRect(0,0,w,h);ctx.strokeStyle='#343636';ctx.lineWidth=1;
+ for(let i=0;i<5;i++){let y=top+(h-top-18)*i/4;ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-10,y);ctx.stroke()}
+ let noteOffX=left+(w-left-10)*hold/total;ctx.setLineDash([3,4]);ctx.strokeStyle='#666';ctx.beginPath();ctx.moveTo(noteOffX,top);ctx.lineTo(noteOffX,h-18);ctx.stroke();ctx.setLineDash([]);
+ ctx.fillStyle='#999';ctx.font='10px Arial';ctx.fillText('NOTE ON',left,11);ctx.fillText('NOTE OFF',noteOffX-22,11);
+ if(mode==='filter'||mode==='combined'||mode==='filterenv') curve(cut,'#f0d642',w,h,left,top);
+ if(mode==='filterenv'||mode==='combined') curve(filterEnv,'#ff5a20',w,h,left,top);
+ if(mode==='ampenv'||mode==='combined') curve(ampEnv,'#57a86c',w,h,left,top);
+ if(start!==null){let x=left+(w-left-10)*t/total;ctx.strokeStyle='#eee';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x,top);ctx.lineTo(x,h-18);ctx.stroke()}
+}
+function frame(){let t=currentT();$('phase').textContent=t<.15?'attack':t<hold?'note held':t<total?'release':'done';draw(t);if(t<total)raf=requestAnimationFrame(frame);else{start=null;$('play').textContent='▶ play note'}}
+async function play(){
+ if(start!==null)return;
+ start=performance.now();$('play').textContent='■ playing';frame();
+ audio ||= new (window.AudioContext||window.webkitAudioContext)();
+ await audio.resume();
+ const now=audio.currentTime,osc=audio.createOscillator(),f=audio.createBiquadFilter(),g=audio.createGain();
+ osc.type='sawtooth';osc.frequency.value=110;f.type='lowpass';f.Q.value=1+v('res')/7;g.gain.setValueAtTime(.0001,now);
+ osc.connect(f);f.connect(g);g.connect(audio.destination);
+ const base=100+v('cutoff')/100*3500, peak=Math.max(80,Math.min(9000,base+(v('amount')/100)*5000));
+ f.frequency.setValueAtTime(base,now);f.frequency.linearRampToValueAtTime(peak,now+v('fAttack'));f.frequency.linearRampToValueAtTime(base+(peak-base)*v('fSustain')/100,now+v('fAttack')+v('fDecay'));f.frequency.setValueAtTime(base+(peak-base)*v('fSustain')/100,now+hold);f.frequency.linearRampToValueAtTime(base,now+hold+v('fRelease'));
+ g.gain.linearRampToValueAtTime(.22,now+v('aAttack'));g.gain.linearRampToValueAtTime(.22*v('aSustain')/100,now+v('aAttack')+v('aDecay'));g.gain.setValueAtTime(.22*v('aSustain')/100,now+hold);g.gain.exponentialRampToValueAtTime(.0001,now+hold+v('aRelease'));
+ osc.start(now);osc.stop(now+total+.1);
+}
+$('play').addEventListener('click',play);
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{
+ mode=b.dataset.mode;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===b));
+ const data={
+ filter:['filter','the filter is a gate for frequencies.','Cutoff chooses where the gate sits. Resonance adds emphasis right at that boundary. Nothing has to move over time yet.'],
+ filterenv:['filter envelope','the envelope moves the filter.','The orange ADSR is a control signal. Envelope Amount decides how strongly that orange shape pushes the yellow cutoff curve.'],
+ ampenv:['amp envelope','this curve is loudness.','Unlike the filter envelope, the amp envelope directly controls amplitude: attack = fade in, decay = settle, sustain = held level, release = fade out.'],
+ combined:['combined view','one note, three moving parts.','The filter decides which frequencies get through. The filter envelope moves the cutoff over the life of the note. The amp envelope separately shapes how loud the note is.']
+ }[mode];
+ $('modeName').textContent=data[0];$('headline').innerHTML=data[1].replace(',','<br>');$('description').innerHTML=data[2];draw(currentT())
+});
+const presets={
+ pluck:{cutoff:18,res:30,amount:85,fAttack:.02,fDecay:.32,fSustain:8,fRelease:.18,aAttack:.01,aDecay:.28,aSustain:42,aRelease:.2},
+ pad:{cutoff:24,res:14,amount:45,fAttack:1.15,fDecay:1.4,fSustain:55,fRelease:1.6,aAttack:1.0,aDecay:.8,aSustain:82,aRelease:1.8},
+ flat:{cutoff:52,res:45,amount:0,fAttack:.1,fDecay:.8,fSustain:20,fRelease:.5,aAttack:.02,aDecay:.2,aSustain:100,aRelease:.4},
+ noenv:{cutoff:28,res:18,amount:0,fAttack:.08,fDecay:.8,fSustain:22,fRelease:.5,aAttack:.02,aDecay:.4,aSustain:75,aRelease:.6}
+};
+document.querySelectorAll('.preset').forEach(b=>b.onclick=()=>{for(const [k,val] of Object.entries(presets[b.dataset.preset]))el[k].value=val;updateLabels()});
+updateLabels();resize();
+</script>
+</body></html>
